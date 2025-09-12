@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📐 Missing Side Trig Game</title>
+<style>
+body { font-family: 'Comic Sans MS', cursive, sans-serif; margin: 0; padding: 0; background: linear-gradient(135deg, #f0f9ff, #cbebff); text-align: center; }
+h1 { background: #2196f3; color: white; padding: 15px; margin: 0; }
+#game-container { margin: 20px auto; width: 90%; max-width: 650px; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); position: relative; overflow: hidden; }
+canvas { border: 2px solid #333; border-radius: 10px; margin-bottom: 15px; background: #fafafa; }
+input { padding: 10px; margin: 5px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; width: 250px; }
+button { padding: 10px; margin: 5px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; background: #2196f3; color: white; cursor: pointer; }
+button:hover { background: #1976d2; }
+#feedback { font-size: 18px; margin-top: 10px; font-weight: bold; }
+#tabs { margin: 10px 0; }
+.tab { display: inline-block; padding: 8px 12px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 6px; margin: 3px; cursor: pointer; user-select: none; }
+</style>
+</head>
+<body>
+<h1>📐 Find the Missing Side</h1>
+<div id="game-container">
+  <canvas id="gameCanvas"></canvas>
+  <div id="tabs">
+    <div class="tab">sin(</div>
+    <div class="tab">cos(</div>
+    <div class="tab">tan(</div>
+    <div class="tab">/</div>
+    <div class="tab">*</div>
+    <div class="tab">+</div>
+    <div class="tab">-</div>
+    <div class="tab">(</div>
+    <div class="tab">)</div>
+  </div>
+  <div>
+    <label for="answer">Your Answer:</label>
+    <input type="text" id="answer" placeholder="Enter value or fraction">
+    <button id="submitBtn">Submit</button>
+    <button onclick="restartGame()">Restart</button>
+  </div>
+  <div id="feedback"></div>
+</div>
+<audio id="applause" src="https://www.soundjay.com/human/applause-01.mp3" preload="auto"></audio>
+
+<script>
+const container = document.getElementById("game-container");
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+canvas.width = container.clientWidth - 40;
+canvas.height = 300;
+
+let correctAnswer = 0;
+let currentTriangle = {};
+let particles = [];
+
+const answerInput = document.getElementById('answer');
+
+// Handle tab click (insert) and double click (remove)
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    answerInput.value += tab.textContent;
+  });
+  tab.addEventListener('dblclick', () => {
+    const val = tab.textContent;
+    answerInput.value = answerInput.value.replace(val, '');
+  });
+});
+
+// Safe eval supporting fractions and trig (degrees)
+function safeEval(expr) {
+  expr = expr.replace(/\s+/g,'');
+  expr = expr.replace(/(\d+)\/(\d+)/g,'($1/$2)');
+  expr = expr.replace(/sin\(([^)]+)\)/gi,'Math.sin($1*Math.PI/180)');
+  expr = expr.replace(/cos\(([^)]+)\)/gi,'Math.cos($1*Math.PI/180)');
+  expr = expr.replace(/tan\(([^)]+)\)/gi,'Math.tan($1*Math.PI/180)');
+  try { return eval(expr); } catch { return NaN; }
+}
+
+// Draw triangle
+function drawTriangle() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const angle = Math.floor(Math.random()*51)+20;
+  const sideLength = Math.floor(Math.random()*8)+3;
+  const sideTypes = ["opposite","adjacent","hypotenuse"];
+  const knownSideType = sideTypes[Math.floor(Math.random()*3)];
+  const missingSideType = sideTypes.filter(s=>s!==knownSideType)[Math.floor(Math.random()*2)];
+  const rad = angle*Math.PI/180;
+  let missingSideLength;
+
+  if(knownSideType==="hypotenuse") missingSideLength = missingSideType==="opposite"? Math.sin(rad)*sideLength : Math.cos(rad)*sideLength;
+  else if(knownSideType==="opposite") missingSideLength = missingSideType==="adjacent"? sideLength/Math.tan(rad) : sideLength/Math.sin(rad);
+  else missingSideLength = missingSideType==="opposite"? Math.tan(rad)*sideLength : sideLength/Math.cos(rad);
+
+  currentTriangle = {knownSide:sideLength, angle, knownSideType, missingSideType, missingSideLength};
+
+  const x=100, y=250, scale=20;
+  let opposite = knownSideType==="opposite"? sideLength : (missingSideType==="opposite"? missingSideLength : Math.round(Math.sin(rad)*missingSideLength));
+  let adjacent = knownSideType==="adjacent"? sideLength : (missingSideType==="adjacent"? missingSideLength : Math.round(Math.cos(rad)*missingSideLength));
+
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+adjacent*scale,y); ctx.lineTo(x,y-opposite*scale); ctx.closePath(); ctx.stroke();
+  ctx.fillStyle="#bbdefb"; ctx.fill();
+  ctx.beginPath(); ctx.rect(x,y-20,20,20); ctx.stroke();
+  ctx.fillStyle="black"; ctx.font="14px Arial";
+  ctx.fillText(`${knownSideType} = ${sideLength}`, x-70, y-10);
+  ctx.fillText(`Angle θ = ${angle}°`, x+adjacent*10, y-10);
+
+  document.getElementById("feedback").style.color="black";
+  document.getElementById("feedback").textContent=`🎯 Find the ${missingSideType} of the triangle.`;
+  correctAnswer = Number(missingSideLength.toFixed(2));
+}
+
+// Check answer
+function checkAnswer() {
+  const input = answerInput.value.trim();
+  const userAnswer = safeEval(input);
+  const feedback = document.getElementById("feedback");
+  if(!isNaN(userAnswer)){
+    if(Number(userAnswer.toFixed(2)) === Number(correctAnswer.toFixed(2))){
+      feedback.style.color="green";
+      feedback.textContent="✅ Correct! Well done! 🎉";
+      playApplause(); launchFireworks(); setTimeout(restartGame,3000);
+    } else {
+      feedback.style.color="red";
+      feedback.textContent=`❌ Oops! Correct answer = ${correctAnswer}`;
+    }
+  } else { feedback.style.color="red"; feedback.textContent="⚠️ Invalid input. Try again!"; }
+}
+
+// Restart & Effects
+function restartGame() { answerInput.value=""; particles=[]; drawTriangle(); }
+function playApplause() { const applause=document.getElementById("applause"); applause.currentTime=0; applause.play(); }
+function launchFireworks() {
+  particles=[]; for(let i=0;i<80;i++){particles.push({x:canvas.width/2,y:canvas.height/2,angle:Math.random()*2*Math.PI,speed:Math.random()*4+2,radius:Math.random()*3+2,life:100});} animateFireworks();
+}
+function animateFireworks() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const {knownSide,angle}=currentTriangle;
+  const x=100,y=250,scale=20; const rad=angle*Math.PI/180;
+  let opposite=currentTriangle.missingSideType==="opposite"?currentTriangle.missingSideLength:(currentTriangle.knownSideType==="opposite"?knownSide:Math.round(Math.sin(rad)*currentTriangle.missingSideLength));
+  let adjacent=currentTriangle.missingSideType==="adjacent"?currentTriangle.missingSideLength:(currentTriangle.knownSideType==="adjacent"?knownSide:Math.round(Math.cos(rad)*currentTriangle.missingSideLength));
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+adjacent*scale,y); ctx.lineTo(x,y-opposite*scale); ctx.closePath(); ctx.stroke(); ctx.fillStyle="#bbdefb"; ctx.fill();
+  ctx.beginPath(); ctx.rect(x,y-20,20,20); ctx.stroke();
+  particles.forEach(p=>{const dx=Math.cos(p.angle)*p.speed;const dy=Math.sin(p.angle)*p.speed;p.x+=dx;p.y+=dy;p.life-=2;ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);ctx.fillStyle=`rgba(${Math.random()*255},${Math.random()*255},${Math.random()*255},${p.life/100})`;ctx.fill();});
+  particles=particles.filter(p=>p.life>0); if(particles.length>0) requestAnimationFrame(animateFireworks);
+}
+
+// Event listeners
+answerInput.addEventListener("keypress", e=>{if(e.key==="Enter") checkAnswer();});
+document.getElementById("submitBtn").addEventListener("click",checkAnswer);
+drawTriangle();
+</script>
+</body>
+</html>
